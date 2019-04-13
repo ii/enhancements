@@ -1,5 +1,5 @@
 ---
-title: KEP Template
+title: Behavior-driven Conformance Testing
 authors:
   - "@johnbelamaric"
 owning-sig: sig-architecture
