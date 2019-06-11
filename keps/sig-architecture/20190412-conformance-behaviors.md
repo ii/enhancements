@@ -12,7 +12,7 @@ approvers:
   - "@smarterclayton"
 editor: TBD
 creation-date: 2019-04-12
-last-updated: 2010-04-12
+last-updated: 2010-06-11
 status: provisional
 ---
 
@@ -63,9 +63,12 @@ Check these off as they are completed for the Release Team to track. These check
 ## Summary
 
 This proposal modifies the conformance testing framework to be driven by a list
-of agreed upon behaviors. Behaviors are tracked in the repository, rather than
-in GitHub issues, allowing them to be reviewed and approved independently of the
-tests that evaluate them.
+of agreed upon behaviors. These behaviors are identified by processing of the
+API schemas, documentation, expert knowledge, and code examination. They are
+explicitly documented and tracked in the repository rather than in GitHub
+issues, allowing them to be reviewed and approved independently of the tests
+that evaluate them. Additionally it proposes new tooling to generate tests, test
+scaffolding, and test coverage reports.
 
 ## Motivation
 
@@ -84,124 +87,194 @@ documentation, a subset of the e2e test, and the code itself. This makes it
 impossible to identify if the conformance suite provides a meaningful test of a
 cluster’s operation.
 
-This proposal is to explicitly define a machine-readable list of expected
-behaviors from a conformant cluster. This top-down approach is a lot of work,
-but it has some important benefits:
-
-* The reviewers of “conforming behavior” do not need to be the same people as
-  the reviewers of “this test code validates the behavior”.
-* Distributors or implementors of pluggable components have a single location to
-  reference for expectations.
-* Coverage can be measured by tying specific tests back to the list of
-  behaviors.
-* Tooling can produce an explicit conformance report displaying the behaviors
-  and the status of each test that checks that behavior.
-* Behaviors can be grouped into sets of functionality that are conformant only
-  for specific cluster profiles.
-* It is a forcing function to clearly document each expected conforming
-  behavior.
+Additionally, progress in writing and promoting tests has been slow and too much
+manual effort is involved. As a starting point, this proposal includes new
+tooling that uses the API schemas to identify expected behaviors and produce
+tests and test scaffolding to quickly cover those behaviors.
 
 ### Goals
 
 * Enable separate review of behaviors and tests that evaluate those behaviors.
 * Provide a single location for defining conforming behavior.
+* Provide tooling to generate as many of the behaviors as possible from API
+  schemas.
+* Provide tooling to generate tests and test scaffolding for validating
+  behaviors.
 * Provide tooling to measure the conformance test coverage of the behaviors.
 * Provide an incremental migration path from current conformance testing to the
   updated framework.
-* Update the tooling for producing conformance reports.
 
 ### Non-Goals
 
-* Develop a complete set of behaviors that define a conforming cluster.
-* Add new conformance tests.
+* Develop a complete set of behaviors that define a conforming cluster. This is
+  an ongoing effort, and this proposal is intended to make that more efficient.
+* Add new conformance tests. It is expected that during this effort new
+  tests may be created using the proposed tooling, but it is not explicitly part
+  of this proposal.
 
 ## Proposal
 
-Files that define each behavior in a machine-readable format will
-be created and stored in the k/k repository. These files include identifiers
-for the behaviors that can be used within the e2e tests, so that the test logs
-contain enough information to connect the test back to the behavior.
+The proposal consists of four deliverables:
+* A machine readable format to define conforming behaviors.
+* Tooling to generate lists of behaviors from the API schemas.
+* Tooling to generate tests and test scaffoloding to evaulate those behaviors.
+* Tooling to compare the implemented tests to the list of behaviors and
+  calculate coverage.
 
-The structure of the YAML file is described by these Go types:
+### Representation of Behaviors
+
+Behaviors must be captured in the repository and agreed upon as required for
+conformance. Behaviors are broken into feature areas, and there are multiple
+suites for each feature area. Some of these suites may be machine-generated
+based upon the API schema, whereas others are handwritten. Keeping the
+generated and handwritten suites in separate files allows regeneration of the
+auto-discovered behavior suites.
+
+Validation and conformance designations are made on a per-suite basis,
+not a per-behavior basis. There may be multiple suites in a feature area
+that are required for validation and/or conformance.
+
+The grouping at the suite level [JB: or should this be called "feature"?]
+should be defined based upon subjective judgement of how behaviors relate
+to one another, along with an understanding that all behaviors in a given
+suite may be required to function for a given cluster to pass validation
+for that suite. [JB: we may also want to group based on API group and version?]
+
+Typical suites defined for any given feature will include:
+ * API spec. This suite is generated from the API schema and represents
+   the basic field-by-field functionality of the feature. For features
+   that include provider-specific fields (for example, various VolumeSource
+   fields for pods), those must be segregated into separate suites.
+ * Internal interactions. This suite tests interactions between settings
+   of fields within the API schema for this feature.
+ * External interactions. This suite tests interactions between this feature
+   and other features.
+
+Each suite may be stored in a separate file in a directory for the specific
+area. For example, a "Pods" area would be structured as a `pods` directory with
+these files:
+ * `spec.yaml` describing the set of behaviors auto-generated from the API
+   specification.
+ * `lifecycle.yaml` describing the set of behaviors expected from the Pod
+   lifecycle.
+
+The structure of the YAML files is described by these Go types:
 
 ```
-package conformance
-
+// Area defines a general grouping of behaviors
 type Area struct {
-	Area      string     `json:"area,omitempty"`
-	Api       string     `json:"api,omitempty"`
-	Behaviors []Behavior `json:"behaviors,omitempty"`
+        // Area is the name of the area.
+        Area   string  `json:"area,omitempty"`
+
+        // Suites is a list containing each suite of behaviors for this area.
+        Suites []Suite `json:"suites,omitempty"`
+}
+
+type Suite struct {
+        // Suite is the name of this suite.
+        Suite       string     `json:"suite,omitempty"`
+
+        // Level is `Conformance` or `Validation`.
+        Level       string     `json:"level,omitempty"`
+
+        // Description is a human-friendly description of this suite, possibly
+        // for inclusion in the conformance reports.
+        Description string     `json:"description,omitempty"`
+
+        // Behaviors is the list of specific behaviors that are part of this
+        // suite.
+        Behaviors   []Behavior `json:"behaviors,omitempty"`
 }
 
 type Behavior struct {
-	Id          string `json:"id,omitempty"`
-	Description string `json:"description,omitempty"`
+        // Id is a unique identifier for this behavior, and will be used to tie
+        // tests and their results back to this behavior. For example, a
+        // behavior describing the defaulting of the PodSpec nodeSelector might
+        // have an id like `pods/spec/nodeSelector/default`.
+        Id          string `json:"id,omitempty"`
+
+        // ApiObject is the object whose behavior is being described. In
+        // particular, in generated behaviors, this is the object to which
+        // ApiField belongs. For example, `core.v1.PodSpec` or
+        // `core.v1.EnvFromSource`.
+        ApiObject   string `json:"apiObject,omitempty"`
+
+        // ApiField is filled out for generated tests that are testing the
+        // behavior associated with a particular field. For example, if
+        // ApiObject is `core.v1.PodSpec`, this could be `nodeSelector`.
+        ApiField    string `json:"apiField,omitempty"`
+
+        // ApiType is the data type of the field; for example, `string`.
+        ApiType     string `json:"apiType,omitempty"`
+
+        // Generated is set to `true` if this entry was generated by tooling
+        // rather than hand-written.
+        Generated   bool   `json:"generated,omitempty"`
+
+        // Description specifies the behavior. For those generated from fields,
+        // this will identify if the behavior in question is for defaulting,
+        // setting at creation time, or updating, along with the API schema field
+        // description.
+        Description string `json:"description,omitempty"`
 }
 ```
 
-An `Area` is an arbitrary grouping used to organize tests. The `Api` field is
-optional and may specify the API group to which the tests apply, if any. Each
-behavior has a unique identifier and a description. An example is shown below.
+### Behavior and Test Generation Tooling
 
-```
-area: pods
-api: core/v1.Pod
-- category: Lifecycle
-  behaviors:
-  - id: pods/lifecycle/hostip
-    description: After Pod creation, the Pod status MUST return successfully and contain a valid IP address.
-  - id: lifecycle/submit-remove
-    description: When a Pod is be created with a unique label, it can be queried using the label selector. It can be watched and will more to Running state. The Pod can be deleted, which sets the pod deletion timestamp, and the watch will receive a deletion event. Afterward, the query with the label selector must be empty.
-  - id: pods/lifecycle/label-update
-    description: Updating a Pod label is successful.
-  - id: pods/lifecycle/active-deadline
-    description: The activeDeadlineSeconds is honored when updated on the podSpec.
-- category: Graceful Termination
-  behaviors:
-  - id: pods/graceful/podspec-period-honored
-    description: The terminationGracePeriodSeconds as specified in the podSpec is honored.
-  - id: pods/graceful/request-period-honored
-    description: The terminationGracePeriod as specified in the DELETE request is honored.
-  - id: pods/graceful/with-prestop
-    description: The terminationGracePeriod is honored when a preStop hook blocks.
-- category: Images
-  behaviors:
-  - id: pods/images/update
-    description: When a podSpec container image is updated, the image is pulled and the container restarted.
-  - id: pods/images/pull-policy
-    description: The podSpec imagePullPolicy is honored during creation and update.
-- category: OS Namespaces
-  behaviors:
-  - id: pods/os-namespaces/network-default
-    description: By default, containers in a pod share the same network namespace.
-  - id: pods/os-namespaces/network-host
-    description: Containers share the host network namespace when hostNetwork is true.
-  - id: pods/os-namespaces/ipc-default
-    description: By default, containers in a pod share the same IPC namespace.
-  - id: pods/os-namespaces/ipc-host
-    description: Containers share the host IPC namespace when hostIPC is true.
-  - id: pods/os-namespaces/pid-default
-    description: By default, containers are in their own PID namespace.
-  - id: pods/os-namespaces/pid-host
-    description: Containers share the host PID namespace when hostPID is true.
-- category: Volumes
-  behaviors:
-  - id: pods/volumes/sa-token
-    description: Pods by default have a service account token mounted as a volume.
-  - id: pods/volumes/sa-token-disabled
-    description: No service account token volume is mounted if automountServiceAccountToken is false.
-  - id: pods/volumes/shared
-    description: Two containers can mount the same volume and see each others' files.
-```
+Some sets of behaviors may be tested in a similar, mechanical way. Basic CRUD
+operations, including updates to specific fields and constraints on immutable
+fields, operate in a similar manner across all API resources. Given this, it is
+feasible to automate the creation of simple tests for these behaviors, along
+with the behavior descriptions in the `spec.yaml`. In some cases a complete test
+may not be easy to generate, but a skeleton may be created that can be be
+converted into a valid test with minimal effort.
 
-In order to allow incremental adoption of this framework, rather than a new
+For these tests, the input is a set of manifests that are applied to the
+cluster, along with a set of conditions that are expected to be realized within
+a specified timeframe. The test framework will apply the manifests, and monitor
+the cluster for the conditions to occur; if they do not occur within the
+timeframe, the test will fail.
+
+For each Spec object, scaffolding can be defined to include the following tests:
+
+* Creation and read of the resource with only required fields specified.
+  * API functions as expected: Resource is created and may be read, and defaults
+    are set. This is mechanical and can be completely generated.
+  * Cluster behaves as expected. This cannot be generated, but a skeleton can be
+    generated that allows test authors to evaluate the condition of the cluster
+    to make sure it meets the expectations.
+* Deletion of the resource. This may be mostly mechanical but if there are side-
+  effects, such as garbage collection of related resources, we may want to have
+  manually written evaluation here as well.
+* Creation of resource with each field set, and update of each mutable field.
+  * For each mutable field, apply a patch to the based resource definition
+    before creation (for create tests), or after creation (for update tests).
+  * Evaluate that the API functions as expected; this is mechanical and
+    generated.
+  * Evaluate that the cluster behaves as expected. In some cases this may be
+    able to re-use the same evaluation function used during the creation tests,
+    but often it will require hand-crafted code to test the conditions.
+    Nonetheless, the scaffolding can be generated, minimizing the effort needed
+    to implement the test.
+
+Additional, handwritten tests will be needed that modify the resource in
+multiple ways and evaulate the behavior. The scaffolding must be built such that
+the same process is used for these tests. The test author must only need to
+define:
+* A patch to apply to create or update the resource.
+* A function to evaluate the effect of the API call.
+
+With those two, the same creation and update scaffolding defined for individual
+field updates can be reused.
+
+### Coverage Tooling
+
+In order to tie behaviors back to the tests that are generated, including
+existing e2e tests that already cover behaviors, new tags with behavior IDs will
+be added to conformance tests. Using the existing conformance framework
+mechanism allows incremental adoption of this proposal. Thus, rather than a new
 conformance framework function, test authors will indicate the behaviors covered
-by their tests with a label. So, a change may look something like:
-
-```
--       framework.ConformanceIt("should get a host IP [NodeConformance]", func() {
-+       framework.ConformanceIt("should get a host IP [NodeConformance] [Behavior:pods/lifecycle/hostip]", func() {
-```
+by their tests with a tag in the `framework.ConformanceIt` call.
 
 This also enables a single test to validate multiple behaviors, although that
 should be discouraged.
@@ -218,6 +291,7 @@ this is not a high risk.
 ## Implementation History
 
 - 2019-04-12: Created
+- 2019-06-11: Updated to include behavior and test generating from APIs.
 
 ## Drawbacks
 
