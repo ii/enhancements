@@ -1,7 +1,6 @@
-# KEP-3000: Artifact Promotion and Distribution Policy
+# KEP/MST-3000: Artifact Promotion and Distribution Policy
 
 <!-- toc -->
-- [Release Signoff Checklist](#release-signoff-checklist)
 - [Summary](#summary)
 - [Motivation](#motivation)
   - [Goals](#goals)
@@ -20,157 +19,110 @@
 - [Infrastructure Needed (Optional)](#infrastructure-needed-optional)
 <!-- /toc -->
 
-## Release Signoff Checklist
-- [ ] Uncomment Checklist
-<!--
-**ACTION REQUIRED:** In order to merge code into a release, there must be an
-issue in [kubernetes/enhancements] referencing this KEP and targeting a release
-milestone **before the [Enhancement Freeze](https://git.k8s.io/sig-release/releases)
-of the targeted release**.
-
-For enhancements that make changes to code or processes/procedures in core
-Kubernetes—i.e., [kubernetes/kubernetes], we require the following Release
-Signoff checklist to be completed.
-
-Check these off as they are completed for the Release Team to track. These
-checklist items _must_ be updated for the enhancement to be released.
--->
-<!-- Commenting out Release Signoff until approved
-
-Items marked with (R) are required *prior to targeting to a milestone / release*.
-
-- [ ] (R) Enhancement issue in release milestone, which links to KEP dir in [kubernetes/enhancements] (not the initial KEP PR)
-- [ ] (R) KEP approvers have approved the KEP status as `implementable`
-- [ ] (R) Design details are appropriately documented
-- [ ] (R) Test plan is in place, giving consideration to SIG Architecture and SIG Testing input (including test refactors)
-  - [ ] e2e Tests for all Beta API Operations (endpoints)
-  - [ ] (R) Ensure GA e2e tests for meet requirements for [Conformance Tests](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/conformance-tests.md) 
-  - [ ] (R) Minimum Two Week Window for GA e2e tests to prove flake free
-- [ ] (R) Graduation criteria is in place
-  - [ ] (R) [all GA Endpoints](https://github.com/kubernetes/community/pull/1806) must be hit by [Conformance Tests](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/conformance-tests.md) 
-- [ ] (R) Production readiness review completed
-- [ ] (R) Production readiness review approved
-- [ ] "Implementation History" section is up-to-date for milestone
-- [ ] User-facing documentation has been created in [kubernetes/website], for publication to [kubernetes.io]
-- [ ] Supporting documentation—e.g., additional design documents, links to mailing list discussions/SIG meetings, relevant PRs/issues, release notes
--->
-<!--
-**Note:** This checklist is iterative and should be reviewed and updated every time this enhancement is being considered for a milestone.
--->
-
 ## Summary
+
+The container images and release binaries produced by our community need a clear path to be hosted by multiple service/cloud providers.
+
+The global community should be routed to the appropriate mirror for their country or cloud provider to ensure cost effective worldwide access.
+
+This KEP should cover the policy and distribution mechanisms we will put in place to allow creating a globally distributed, multi-cloud and country solution.
 
 ## Motivation
 
+Currently we push to a single provider, and distributing to the rest of community comes at great cost nearing $150k/month (mostly egress) in donations.
+
+Additonally some of our community members are unable to access the official release artifacts due to country level firewalls that do not them connect to Google services.
+
+Ideally we can dramatically reduce cost and allow everyone in the world to download the artifacts released by our community.
+
 ### Goals
 
-<!--
-List the specific goals of the KEP. What is it trying to achieve? How will we
-know that this has succeeded?
--->
+A policy and procedure for use by SIG Release to promote container images and release binaries to multiple registries and mirrors.
+
+A solution to allow redirection to appropriate mirrors to lower cost and allow access from any cloud or country globally.
 
 ### Non-Goals
 
-<!--
-What is out of scope for this KEP? Listing non-goals helps to focus discussion
-and make progress.
--->
+Anything related to creation of artifacts, bom, digital signatures.
 
 ## Proposal
 
-<!--
-This is where we get down to the specifics of what the proposal actually is.
-This should have enough detail that reviewers can understand exactly what
-you're proposing, but should not include things like API designs or
-implementation. What is the desired outcome and how do we measure success?.
-The "Design Details" section below is for the real
-nitty-gritty.
--->
+There are two intertwined concepts that are part of this proposal.
 
-### User Stories (Optional)
+First, the policy and procedures to promote/upload our artifacts to multiple providers. Our existing processes upload only to GCS buckets. Ideally we extend the existing software/promotion process to push directly to multiple providers. Alternatively we use a second process to syncronize artifacts from our existing production buckets to similar contructs at other providers.
 
-<!--
-Detail the things that people will be able to do if this KEP is implemented.
-Include as much detail as possible so that people can understand the "how" of
-the system. The goal here is to make this feel real for users without getting
-bogged down.
--->
+Additionally we require a registry and artifact url-redirection solution to the local cloud provider or country.
 
-#### Story 1
+### User Stories
 
-#### Story 2
+#### SIG Release - Image Promotion
 
-### Notes/Constraints/Caveats (Optional)
+```feature
+As a SIG Release volunteer
+I want to promote our binaries/images to multiple clouds
 
-<!--
-What are the caveats to the proposal?
-What are some important details that didn't come across above?
-Go in to as much detail as necessary here.
-This might be a good place to talk about core concepts and how they relate.
--->
+Given a promotion / mainifest
+When my PR is merged
+Then the promotion process occurs
+```
+
+#### Cloud Customer - Installing K8s via kubeadm
+
+```feature
+As a CLOUD end-user
+I want to install kubernetes
+
+Given some compute resources at CLOUD
+When I use kubeadm to deploy Kubernetes
+Then I will be redirected to a local CLOUD registry
+```
+
+### Notes/Constraints/Caveats
+
+The primary purpose of the KEP is getting consensus on the agreed policy and procedure to unblock our community and move forward together.
+
+There has been a lot of activity around the technology and tooling for both goals, but we need shared agreement on policy and procedure first.
 
 ### Risks and Mitigations
 
-<!--
-What are the risks of this proposal, and how do we mitigate? Think broadly.
-For example, consider both security and how this will impact the larger
-Kubernetes ecosystem.
-
-How will security be reviewed, and by whom?
-
-How will UX be reviewed, and by whom?
-
-Consider including folks who also work outside the SIG or subproject.
--->
+This is the primary pipeline for delivering Kubernetes worldwide. Ensuring the appropriate SLAs and support as well as artifact integrite are crucial.
 
 ## Design Details
 
-<!--
-This section should contain enough information that the specifics of your
-change are understandable. This may include API specs (though not always
-required) or even code snippets. If there's any ambiguity about HOW your
-proposal will be implemented, this is the place to discuss them.
--->
+### Release Promotion
 
-### Dependencies
+#### Policy
 
-<!--
-This section must be completed when targeting beta to a release.
--->
+(more details needed, #sig-release-eng?)
 
-## Implementation History
+#### Process
 
-<!--
-Major milestones in the lifecycle of a KEP should be tracked in this section.
-Major milestones might include:
-- the `Summary` and `Motivation` sections being merged, signaling SIG acceptance
-- the `Proposal` section being merged, signaling agreement on a proposed design
-- the date implementation started
-- the first Kubernetes release where an initial version of the KEP was available
-- the version of Kubernetes where the KEP graduated to general availability
-- when the KEP was retired or superseded
--->
+Currently the promotion process is primarily driven by the CIP/[promo-tool#kpromo](https://github.com/kubernetes-sigs/promo-tools#kpromo)? 
 
-## Drawbacks
+### Artifact Distribution
 
-<!--
-Why should this KEP _not_ be implemented?
--->
+#### Policy
 
-## Alternatives
+#### Process
 
-<!--
-What other approaches did you consider, and why did you rule them out? These do
-not need to be as detailed as the proposal, but should include enough
-information to express the idea and why it was not acceptable.
--->
+## Alternatives / Background
+- Apache has a widespread mirror network
+  - @dims has experince here
+  - http://ws.apache.org/mirrors.cgi
+  - https://infra.apache.org/mirrors.html
+- [Umbrella issue: k8s.gcr.io => registry.k8s.io solution k/k8s.io#1834
+](https://github.com/kubernetes/k8s.io/issues/1834)
+- [ii/registry.k8s.io Implementation proposals](https://github.com/ii/registry.k8s.io#registryk8sio)
+- [ii.nz/blog :: Building a data pipline for displaying Kubernetes public artifact traffic
+](https://ii.nz/post/building-a-data-pipline-for-displaying-kubernetes-public-artifact-traffic/)
+### How much is this going to save us?
+Cost of K8s Artifact hosting - Data Studio Graphs
 
-## Infrastructure Needed (Optional)
+![](https://i.imgur.com/LAn4UIE.png)
 
-<!--
-Use this section if you need things from the project/SIG. Examples include a
-new subproject, repos requested, or GitHub details. Listing these here allows a
-SIG to get the process for these resources started right away.
--->
+
+## Infrastructure Needed
+
+It would be good to request some donations for some larger providers, including one in China, via cncf.io/credits
 
 [![hackmd-github-sync-badge](https://hackmd.io/KjHufZssQR654ShkZFUzyA/badge)](https://hackmd.io/KjHufZssQR654ShkZFUzyA)
